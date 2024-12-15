@@ -1,14 +1,20 @@
 [tool.poetry]
 name = "simple-gltf"
 version = "0.1.0"
-description = ""
+description = "A pythonic interface for parsing gltf/glb files based on pygltflib. "
 authors = ["TurtleIzzy <agnimon@gmail.com>"]
 readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+repository = "https://github.com/turtleizzy/simple_gltf"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-numpy = "^1.24"
-pygltflib = "^1.16"
+numpy = "*"
+pygltflib = "*"
 
 [build-system]
 requires = ["poetry-core"]

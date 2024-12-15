@@ -281,8 +281,13 @@ class RootInterface:
         return [SceneInterface(self._gltf, i) for i in self._gltf.scenes]
 
     @cached_property
-    def scene(self) -> "SceneInterface":
+    def scene(self) -> Optional["SceneInterface"]:
         """SceneInterface object for the default scene of the model."""
+        if self._gltf.scene is None:
+            if len(self._gltf.scenes) == 0:
+                return None
+            else:
+                return SceneInterface(self._gltf, self._gltf.scenes[0])
         return SceneInterface(self._gltf, self._gltf.scenes[self._gltf.scene])
 
     def __repr__(self):

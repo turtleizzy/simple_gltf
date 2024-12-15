@@ -34,6 +34,14 @@ PRIMITIVE_MODE_MAPPING = {
 }
 
 def load_data_from_accessor(gltf: GLTF2, accessor: Accessor) -> np.ndarray:
+    """
+    Load data from a given accessor in the GLTF file.
+
+    :param gltf: Input GLTF2 object.
+    :param accessor: The Accessor object from which to load data.
+    :return: A numpy array containing the loaded data.
+    :raises NotImplementedError: If the accessor is sparse, which is not currently supported.
+    """
     if hasattr(accessor, "sparse") and accessor.sparse is not None:
         raise NotImplementedError("Sparse accessor is not supported yet")
     bufferView = gltf.bufferViews[accessor.bufferView]
@@ -54,29 +62,45 @@ def load_data_from_accessor(gltf: GLTF2, accessor: Accessor) -> np.ndarray:
     return res_data
         
 class PrimitiveInterface:
+    """
+    Interface for accessing data of a single primitive in a GLTF mesh.
+    
+    :param gltf: Input GLTF2 object.
+    :param primitive: The Primitive object to interface with.
+    """
     def __init__(self, gltf: GLTF2, primitive: Primitive):
         self._gltf = gltf
         self._primitive: Primitive = primitive
 
     def _load_data_from_accessor(self, accessor_idx: Optional[int]) -> Optional[np.ndarray]:
+        """
+        Load data from an accessor index.
+
+        :param accessor_idx: Index of the accessor to load data from.
+        :return: Numpy array containing the loaded data, or None if no accessor index is provided.
+        """
         if accessor_idx is not None:
             accessor = self._gltf.accessors[accessor_idx]
             return load_data_from_accessor(self._gltf, accessor)
         
     @cached_property
     def position(self) -> Optional[np.ndarray]:
+        """Numpy array of vertex positions, or None if not available."""
         return self._load_data_from_accessor(self._primitive.attributes.POSITION)
         
     @cached_property
     def normal(self) -> Optional[np.ndarray]:
+        """Numpy array of vertex normals, or None if not available."""
         return self._load_data_from_accessor(self._primitive.attributes.NORMAL)
 
     @cached_property
     def tangent(self) -> Optional[np.ndarray]:
+        """Numpy array of vertex tangents, or None if not available."""
         return self._load_data_from_accessor(self._primitive.attributes.TANGENT)
 
     @cached_property
     def color(self) -> List[np.ndarray]:
+        """List of numpy arrays containing vertex colors, or an empty list if none are available."""
         valid_color_idx = [
             self._primitive.attributes.__getattribute__(k) 
                 for k in dir(self._primitive.attributes) if k.startswith("COLOR_") 
@@ -86,6 +110,7 @@ class PrimitiveInterface:
 
     @cached_property
     def texcoords(self) -> List[np.ndarray]:
+        """List of numpy arrays containing texture coordinates, or an empty list if none are available."""
         valid_texcoord_idx = [
             self._primitive.attributes.__getattribute__(k) 
                 for k in dir(self._primitive.attributes) if k.startswith("TEXCOORD_") 
@@ -95,6 +120,7 @@ class PrimitiveInterface:
 
     @cached_property
     def material(self) -> Optional[Material]:
+        """Material object associated with this primitive, or None if not available."""
         if self._primitive.material is not None:
             return self._gltf.materials[self._primitive.material]
         else:
@@ -102,9 +128,11 @@ class PrimitiveInterface:
 
     @cached_property
     def mode(self) -> str:
+        """Rendering mode of the primitive (e.g., TRIANGLES, LINES)."""
         return PRIMITIVE_MODE_MAPPING[self._primitive.mode]
 
     def __repr__(self):
+        """String representation of the primitive, including its mode and available data."""
         reprstr = f"Primitive("
         datas = ["mode: " + self.mode]
         if self.position is not None:
@@ -122,6 +150,12 @@ class PrimitiveInterface:
         return reprstr + ", ".join(datas) + ")"
 
 class MeshInterface:
+    """
+    Interface for accessing data of a single mesh in a GLTF model.
+    
+    :param gltf: Input GLTF2 object.
+    :param mesh: The Mesh object or index of the mesh to interface with.
+    """
     def __init__(self, gltf: GLTF2, mesh: Union[int, Mesh]):
         self._gltf = gltf
         if isinstance(mesh, Mesh):
@@ -131,16 +165,25 @@ class MeshInterface:
 
     @cached_property
     def primitives(self) -> List[PrimitiveInterface]:
+        """List of Primitive objects."""
         return [PrimitiveInterface(self._gltf, i) for i in self._mesh.primitives]
 
     @cached_property
     def name(self) -> str:
+        """Name of the mesh."""
         return self._mesh.name
 
     def __repr__(self) -> str:
+        """String representation of the mesh, including its name."""
         return f"Mesh['{self.name}']"
         
 class NodeInterface:
+    """
+    Interface for accessing data of a single node in a GLTF scene.
+    
+    :param gltf: Input GLTF2 object.
+    :param node: The Node object or index of the node to interface with.
+    """
     def __init__(self, gltf: GLTF2, node: Union[int, Node]):
         self._gltf = gltf
         if isinstance(node, Node):
@@ -150,10 +193,12 @@ class NodeInterface:
 
     @cached_property
     def children(self) -> List["NodeInterface"]:
+        """Children nodes of this node."""
         return [NodeInterface(self._gltf, i) for i in self._node.children]
 
     @cached_property
     def mesh(self) -> Optional["MeshInterface"]:
+        """MeshInterface object for the mesh attached to this node, or None if no mesh is attached."""
         if self._node.mesh is None:
             return None
         else:
@@ -161,6 +206,7 @@ class NodeInterface:
 
     @cached_property
     def matrix(self) -> Optional[np.ndarray]:
+        """Transformation matrix of the node, or None if no matrix is specified."""
         if self._node.matrix is None:
             return None
         else:
@@ -168,9 +214,11 @@ class NodeInterface:
 
     @cached_property
     def name(self) -> str:
+        """Name of the node."""
         return self._node.name
         
     def __repr__(self):
+        """String representation of the node, including its name, children, mesh, and transformation matrix."""
         reprstr = f"Node['{self.name}']: ("
         datas = []
         children = self.children
@@ -185,6 +233,12 @@ class NodeInterface:
         return reprstr
 
 class SceneInterface:
+    """
+    Interface for accessing data of a single scene in a GLTF model.
+    
+    :param gltf: Input GLTF2 object.
+    :param scene: The Scene object or index of the scene to interface with.
+    """
     def __init__(self, gltf: GLTF2, scene: Union[int, Scene]):
         self._gltf = gltf
         if isinstance(scene, Scene):
@@ -194,22 +248,32 @@ class SceneInterface:
         
     @cached_property
     def nodes(self) -> List["NodeInterface"]:
+        """List of NodeInterface objects for each node in the scene."""
         return [NodeInterface(self._gltf, i) for i in self._scene.nodes]
 
     def __repr__(self):
+        """String representation of the scene, including its nodes."""
         return f"Nodes: [" + ",".join([str(i) for i in self.nodes]) + "]"
 
 class RootInterface:
+    """
+    Interface for accessing data of the root level in a GLTF model.
+    
+    :param gltf: Input GLTF2 object.
+    """
     def __init__(self, gltf: GLTF2):
         self._gltf = gltf
         
     @cached_property
     def scenes(self) -> List["SceneInterface"]:
+        """List of SceneInterface objects for each scene in the model."""
         return [SceneInterface(self._gltf, i) for i in self._gltf.scenes]
 
     @cached_property
     def scene(self) -> "SceneInterface":
+        """SceneInterface object for the default scene of the model."""
         return SceneInterface(self._gltf, self._gltf.scenes[self._gltf.scene])
 
     def __repr__(self):
+        """String representation of the root, including its scenes."""
         return f"Scenes: [" + ",".join([str(i) for i in self.scenes]) + "]"
